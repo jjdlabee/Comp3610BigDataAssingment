@@ -14,6 +14,7 @@ This project implements a **complete data pipeline** for analyzing millions of t
 ## Submission Requirements
 
 ✅ **GitHub Repository**: [jjdlabee/Comp3610BigDataAssingment](https://github.com/jjdlabee/Comp3610BigDataAssingment)
+
 - `assignment1.ipynb` - Complete analytical workflow with Parts 1, 2, and Part 3 visualizations
 - `app.py` - Streamlit dashboard application
 - `requirements.txt` - All dependencies with pinned versions
@@ -21,6 +22,7 @@ This project implements a **complete data pipeline** for analyzing millions of t
 - `.gitignore` - Excludes data files (not committed to repo)
 
 📊 **Deployed Dashboard**: [Streamlit Cloud URL](DEPLOYMENT.md)
+
 - Public access without authentication
 - All filters and visualizations fully functional
 - Deployment instructions in [DEPLOYMENT.md](DEPLOYMENT.md)
