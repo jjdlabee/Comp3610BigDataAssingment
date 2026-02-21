@@ -15,7 +15,7 @@ This project implements a **complete data pipeline** for analyzing millions of t
 
 **GitHub Repository**: [jjdlabee/Comp3610BigDataAssingment](https://github.com/jjdlabee/Comp3610BigDataAssingment)
 
-**Deployed Dashboard**: [Streamlit Cloud URL](DEPLOYMENT.md)
+**Deployed Dashboard**: [Streamlit Cloud URL](https://jjdlabee-comp3610bigdataassingment-app-helj5m.streamlit.app/)
 
 ## Prerequisites
 
