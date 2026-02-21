@@ -209,6 +209,7 @@ __marimo__/
 # Project-specific data and config
 data/raw/*.parquet
 data/raw/*.csv
+data/processed/*.parquet
 data/processed/*.csv
 data/processed/*.json
 
