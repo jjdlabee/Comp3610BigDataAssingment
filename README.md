@@ -92,3 +92,11 @@ Open browser to `http://localhost:8501`
 3. **Payment Methods**: Credit cards account for >70% of transactions
 4. **Tipping**: Higher during business hours (8 AM-6 PM); lower late-night
 5. **Trip Distance**: Right-skewed distribution with median ~2 miles; most trips within Manhattan
+
+## AI Usage
+
+Github copilot was used for quick completion of repetative lines.
+
+ChatGPT was used to simple format and concepts learning (ie. setting up vs code with python and a notbook)
+
+VS Code Copilot with Claude was used for fast creation of readme file, formating of text in the notebook and it heavily assisted with the visuallization using streamlit (Some stuff just was not clicking in the short timespan)
