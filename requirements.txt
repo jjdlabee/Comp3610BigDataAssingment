@@ -3,3 +3,4 @@ polars==1.38.1
 duckdb==1.4.4
 streamlit==1.54.0
 plotly==6.5.2
+nbformat>=4.2.0
