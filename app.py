@@ -81,7 +81,7 @@ def load_and_process_data():
             
             # Step 5: Aggregate by date and hour
             # Group by date and hour, sum totals and count trips
-            df_agg = df_clean.groupby(['date', 'hour']).agg([
+            df_agg = df_clean.group_by(['date', 'hour']).agg([
                 pl.col('PULocationID').count().alias('num_trips'),
                 pl.col('trip_distance').sum().alias('total_distance'),
                 pl.col('fare_amount').sum().alias('total_fares'),
