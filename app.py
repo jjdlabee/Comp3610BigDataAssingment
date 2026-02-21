@@ -1,8 +1,12 @@
 import streamlit as st
 import pandas as pd
+import polars as pl
+import duckdb
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
+import requests
+import io
 
 st.set_page_config(
     page_title="NYC Taxi Dashboard",
@@ -11,9 +15,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ============================================================================
-# TITLE AND INTRODUCTION
-# ============================================================================
 st.title("🚕 NYC Yellow Taxi Dashboard")
 st.markdown("""
 This interactive dashboard provides insights into NYC yellow taxi trips for January 2024.
@@ -23,44 +24,103 @@ passenger behavior, payment methods, and temporal patterns.
 
 st.divider()
 
-# ============================================================================
-# DATA LOADING AND CACHING
-# ============================================================================
 @st.cache_data
-def load_data():
-    """Load and process taxi data"""
-    try:
-        df = pd.read_parquet('data/processed/taxi_summary.parquet')
-        
-        # Convert date to datetime
-        df['date'] = pd.to_datetime(df['date'])
-        df['pickup_date'] = df['date'].dt.date
-        df['day_of_week'] = df['date'].dt.day_name()
-        df['month'] = df['date'].dt.month
-        df['year'] = df['date'].dt.year
-        
-        # Calculate derived metrics
-        df['avg_distance'] = df['total_distance'] / df['num_trips']
-        df['avg_fare'] = df['total_fares'] / df['num_trips']
-        df['avg_tip'] = df['total_tips'] / df['num_trips']
-        df['avg_passengers'] = df['total_passengers'] / df['num_trips']
-        
-        return df
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
-        import traceback
-        st.error(traceback.format_exc())
-        return None
+def load_and_process_data():
+    """
+    Download, clean, and aggregate taxi data.
+    Data is cached after first run to avoid reprocessing.
+    """
+    with st.spinner("Loading and processing taxi data... (this may take a few minutes)"):
+        try:
+            # Download raw parquet and zone lookup files
+            print("Downloading taxi data...")
+            parquet_url = 'https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2024-01.parquet'
+            csv_url = 'https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv'
+            
+            # Read parquet directly from URL
+            df_raw = pl.read_parquet(parquet_url)
+            df_zones = pl.read_csv(csv_url)
+            
+            print(f"Raw data: {df_raw.height} rows")
+            
+            # Step 1: Remove rows with null values in critical columns
+            df_clean = df_raw.filter(
+                (pl.col("tpep_pickup_datetime").is_not_null()) &
+                (pl.col("tpep_dropoff_datetime").is_not_null()) &
+                (pl.col("PULocationID").is_not_null()) &
+                (pl.col("DOLocationID").is_not_null()) &
+                (pl.col("fare_amount").is_not_null()) &
+                (pl.col("tip_amount").is_not_null()) &
+                (pl.col("passenger_count").is_not_null())
+            )
+            
+            print(f"After null removal: {df_clean.height} rows")
+            
+            # Step 2: Remove invalid trips
+            # Filter out fares >= $500 and negative fares, negative distances
+            df_clean = df_clean.filter(
+                (pl.col("trip_distance") > 0) &
+                (pl.col("fare_amount") >= 0) &
+                (pl.col("fare_amount") < 500)
+            )
+            
+            print(f"After invalid trip removal: {df_clean.height} rows")
+            
+            # Step 3: Remove trips where pickup is after dropoff
+            df_clean = df_clean.filter(
+                pl.col("tpep_pickup_datetime") < pl.col("tpep_dropoff_datetime")
+            )
+            
+            print(f"After temporal validation: {df_clean.height} rows")
+            
+            # Step 4: Feature engineering - extract hour and date
+            df_clean = df_clean.with_columns([
+                pl.col('tpep_pickup_datetime').dt.hour().alias('hour'),
+                pl.col('tpep_pickup_datetime').dt.date().alias('date')
+            ])
+            
+            # Step 5: Aggregate by date and hour
+            # Group by date and hour, sum totals and count trips
+            df_agg = df_clean.groupby(['date', 'hour']).agg([
+                pl.col('PULocationID').count().alias('num_trips'),
+                pl.col('trip_distance').sum().alias('total_distance'),
+                pl.col('fare_amount').sum().alias('total_fares'),
+                pl.col('tip_amount').sum().alias('total_tips'),
+                pl.col('passenger_count').sum().alias('total_passengers')
+            ]).sort(['date', 'hour'])
+            
+            # Convert to pandas for Streamlit compatibility
+            df = df_agg.to_pandas()
+            
+            # Convert date to datetime
+            df['date'] = pd.to_datetime(df['date'])
+            df['pickup_date'] = df['date'].dt.date
+            df['day_of_week'] = df['date'].dt.day_name()
+            df['month'] = df['date'].dt.month
+            df['year'] = df['date'].dt.year
+            
+            # Calculate derived metrics
+            df['avg_distance'] = df['total_distance'] / df['num_trips']
+            df['avg_fare'] = df['total_fares'] / df['num_trips']
+            df['avg_tip'] = df['total_tips'] / df['num_trips']
+            df['avg_passengers'] = df['total_passengers'] / df['num_trips']
+            
+            print(f"Aggregated data: {len(df)} rows")
+            return df
+            
+        except Exception as e:
+            st.error(f"Error loading data: {e}")
+            import traceback
+            st.error(traceback.format_exc())
+            return None
+
 
 # Load data
-df = load_data()
+df = load_and_process_data()
 
 if df is None:
     st.stop()
 
-# ============================================================================
-# SIDEBAR FILTERS
-# ============================================================================
 st.sidebar.header("🔧 Filters")
 
 # Date range selector
@@ -100,9 +160,6 @@ hour_range = st.sidebar.slider(
     key="hour_range"
 )
 
-# ============================================================================
-# APPLY FILTERS
-# ============================================================================
 def apply_filters(data):
     """Apply all filters to the dataset"""
     filtered = data.copy()
@@ -125,9 +182,6 @@ filtered_df = apply_filters(df)
 
 st.sidebar.info(f"📊 Filtered Data: {len(filtered_df):,} records out of {len(df):,} total")
 
-# ============================================================================
-# KEY METRICS
-# ============================================================================
 st.header("📈 Key Metrics")
 
 col1, col2, col3, col4, col5 = st.columns(5)
@@ -154,9 +208,6 @@ with col5:
 
 st.divider()
 
-# ============================================================================
-# VISUALIZATIONS SECTION
-# ============================================================================
 st.header("📊 Visualizations")
 
 # Create tabs for better organization
@@ -168,9 +219,6 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Passenger Patterns"
 ])
 
-# ============================================================================
-# TAB 1: TRIPS OVER TIME (LINE CHART)
-# ============================================================================
 with tab1:
     st.subheader("1. Number of Trips Over Time")
     
@@ -196,9 +244,6 @@ with tab1:
     - The overall trend indicates consistent taxi usage with variations based on day of week and external factors.
     """)
 
-# ============================================================================
-# TAB 2: AVERAGE FARE BY HOUR (BAR CHART)
-# ============================================================================
 with tab2:
     st.subheader("2. Average Fare by Hour of Day")
     
@@ -223,9 +268,6 @@ with tab2:
     - Late night and early morning hours show more variable fare patterns reflecting different passenger demographics.
     """)
 
-# ============================================================================
-# TAB 3: AVERAGE TRIP DISTANCE (BAR CHART)
-# ============================================================================
 with tab3:
     st.subheader("3. Trip Distance Distribution by Hour")
     
@@ -250,9 +292,6 @@ with tab3:
     - Peak hours tend to have shorter average trips reflecting urban commuting patterns within Manhattan.
     """)
 
-# ============================================================================
-# TAB 4: TIPS ANALYSIS (LINE CHART)
-# ============================================================================
 with tab4:
     st.subheader("4. Total Tips Revenue Over Time")
     
@@ -278,9 +317,6 @@ with tab4:
     - The consistency of tipping behavior indicates a stable customer base with predictable gratuity patterns.
     """)
 
-# ============================================================================
-# TAB 5: PASSENGER PATTERNS (HEATMAP)
-# ============================================================================
 with tab5:
     st.subheader("5. Trip Volume Heatmap: Day of Week vs Hour")
     
@@ -315,9 +351,6 @@ with tab5:
 
 st.divider()
 
-# ============================================================================
-# DATA TABLE
-# ============================================================================
 st.header("📋 Data Preview")
 
 if st.checkbox("Show filtered data table"):
@@ -327,9 +360,6 @@ if st.checkbox("Show filtered data table"):
         height=400
     )
 
-# ============================================================================
-# FOOTER
-# ============================================================================
 st.divider()
 st.markdown("""
 ---
