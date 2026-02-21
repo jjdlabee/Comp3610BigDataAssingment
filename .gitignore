@@ -211,3 +211,7 @@ data/
 notebooks/
 
 .streamlit/
+
+config.toml
+
+dashboard/
