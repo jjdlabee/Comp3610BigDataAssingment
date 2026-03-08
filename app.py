@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import requests
 import io
 
+
 st.set_page_config(
     page_title="NYC Taxi Dashboard",
     page_icon="🚕",
